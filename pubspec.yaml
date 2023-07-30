@@ -1,0 +1,31 @@
+name: google_fit_app
+description: A new Flutter project.
+
+publish_to: 'none' # Remove this line if you wish to publish to pub.dev
+
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0-406.0.dev <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  googleapis: ^11.2.0
+  google_sign_in: ^6.1.4
+  googleapis_auth: ^1.4.1
+  cupertino_icons: ^1.0.2
+  firebase_core: ^2.13.1
+  permission_handler: ^10.4.3
+  shelf: ^1.4.1
+  extension_google_sign_in_as_googleapis_auth: ^2.0.10
+  http: ^1.1.0
+
+dev_dependencies: 
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^2.0.0
+
+flutter:
+  uses-material-design: true
