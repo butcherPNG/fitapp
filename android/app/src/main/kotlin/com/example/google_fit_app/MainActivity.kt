@@ -11,6 +11,7 @@ import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.common.api.GoogleApiActivity
 import android.os.Bundle
 import android.util.Log
+import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.Instant
@@ -22,11 +23,13 @@ import io.flutter.plugin.common.MethodCall
 import com.google.android.gms.tasks.OnSuccessListener
 import android.os.Handler
 import com.google.android.gms.tasks.Tasks
+import org.json.JSONArray
+import org.json.JSONObject
 
 
 class MainActivity: FlutterActivity() {
     private val TAG = "MESSAGE OF APP"
-    private val CHANNEL_FIT = "flutter.fit.requests";
+    private val ChannelFit = "flutter.fit.requests";
     private val GOOGLE_FIT_PERMISSIONS_REQUEST_CODE = 1
     private val fitnessOptions = FitnessOptions.builder()
         .addDataType(DataType.TYPE_HEART_RATE_BPM, FitnessOptions.ACCESS_READ)
@@ -39,7 +42,7 @@ class MainActivity: FlutterActivity() {
     override fun configureFlutterEngine(@NonNull flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL_FIT).setMethodCallHandler { call, result ->
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, ChannelFit).setMethodCallHandler { call, result ->
             if(call.method == "getHealthData") {
                 val account = GoogleSignIn.getAccountForExtension(this, fitnessOptions)
                 if (!GoogleSignIn.hasPermissions(account, fitnessOptions)) {
@@ -53,35 +56,106 @@ class MainActivity: FlutterActivity() {
                     val start = end.minusWeeks(1)
                     val endSeconds = end.atZone(ZoneId.systemDefault()).toEpochSecond()
                     val startSeconds = start.atZone(ZoneId.systemDefault()).toEpochSecond()
-                
+
                     val readRequest = DataReadRequest.Builder()
                         .read(DataType.TYPE_STEP_COUNT_DELTA)
-                        .bucketByTime(1, TimeUnit.DAYS)
                         .setTimeRange(startSeconds, endSeconds, TimeUnit.SECONDS)
                         .build()
 
-                    val account = GoogleSignIn.getAccountForExtension(this, fitnessOptions)
-                    Fitness.getHistoryClient(context.applicationContext, account)
+
+                    Fitness.getHistoryClient(this, GoogleSignIn.getAccountForExtension(this, fitnessOptions))
                         .readData(readRequest)
-                        .addOnSuccessListener({ response ->
-                            result.success(response.dataSets.size.toString())
-                            // тут расписываем полученные данные, но, так как dataSet постоянно пустой, просто кидаем длину списка
-                            for (dataSet in response.dataSets) {
-                                val dataType = dataSet.dataType
-                                val dataTypeName = dataType.name
-                    
-                                Log.i(TAG, "Data Type Name: $dataTypeName")
-                                for (dataPoint in dataSet.dataPoints) {
-                                    Log.i(TAG, dataPoint.dataType.name)
-                                    val fields = dataPoint.dataType.fields
-                                    for (field in fields) {
-                                        val value = dataPoint.getValue(field).asString()
-                                        Log.i(TAG, "${field.name}: $value")
-                                    }
+                        .addOnSuccessListener { response ->
+
+                            val dataSet = response.getDataSet(DataType.TYPE_STEP_COUNT_DELTA)
+                            Log.i(TAG, dataSet.toString())
+                            Log.i(TAG, dataSet.dataPoints.toString())
+                            var stepsWeek = 0
+                            for (dataPoint in dataSet.dataPoints) {
+                                Log.i(TAG, dataPoint.dataType.name)
+                                val fields = dataPoint.dataType.fields
+                                for (field in fields) {
+                                    val value = dataPoint.getValue(field).asInt()
+                                    Log.i(TAG, "${field.name}: $value")
+                                    stepsWeek += value
                                 }
                             }
-                        })
+                            result.success(stepsWeek.toString())
+
+                            // Do something with totalSteps
+                        }
+                        .addOnFailureListener { e ->
+                            Log.i(TAG, "There was a problem getting steps.", e)
+                        }
                         .addOnFailureListener({ e -> Log.d(TAG, "OnFailure()", e) })
+
+
+                }
+            } else if (call.method == "getStepsDay") {
+                val account = GoogleSignIn.getAccountForExtension(this, fitnessOptions)
+                if (!GoogleSignIn.hasPermissions(account, fitnessOptions)) {
+                    GoogleSignIn.requestPermissions(
+                        this,
+                        GOOGLE_FIT_PERMISSIONS_REQUEST_CODE,
+                        account,
+                        fitnessOptions)
+                } else {
+
+                    Fitness.getHistoryClient(this, GoogleSignIn.getAccountForExtension(this, fitnessOptions))
+                        .readDailyTotal(DataType.TYPE_STEP_COUNT_DELTA)
+                        .addOnSuccessListener { response ->
+                            val stepsDay =
+                                response.dataPoints.firstOrNull()?.getValue(Field.FIELD_STEPS)
+                                    ?.asInt() ?: 0
+                            result.success(stepsDay.toString())
+                            // Do something with totalSteps
+                        }
+                        .addOnFailureListener { e ->
+                            Log.i(TAG, "There was a problem getting steps.", e)
+                        }
+                        .addOnFailureListener({ e -> Log.d(TAG, "OnFailure()", e) })
+
+
+                }
+            } else if (call.method == "getHeight") {
+                val account = GoogleSignIn.getAccountForExtension(this, fitnessOptions)
+                if (!GoogleSignIn.hasPermissions(account, fitnessOptions)) {
+                    GoogleSignIn.requestPermissions(
+                        this,
+                        GOOGLE_FIT_PERMISSIONS_REQUEST_CODE,
+                        account,
+                        fitnessOptions)
+                } else {
+
+                    val endTime = System.currentTimeMillis()
+                    val readHeight = DataReadRequest.Builder()
+                        .read(DataType.TYPE_HEIGHT)
+                        .setTimeRange(1, endTime, TimeUnit.MILLISECONDS)
+                        .build()
+
+                    Fitness.getHistoryClient(
+                        this,
+                        GoogleSignIn.getAccountForExtension(this, fitnessOptions)
+                    )
+                        .readData(readHeight)
+                        .addOnSuccessListener { response ->
+
+                            val dataSetHeight = response.getDataSet(DataType.TYPE_HEIGHT)
+                            for (dataPoint in dataSetHeight.dataPoints) {
+                                // Height value will be in meters
+                                val heightInMeters =
+                                    dataPoint.getValue(Field.FIELD_HEIGHT).asFloat()
+                                Log.i(TAG, "Height: $heightInMeters meters")
+                                result.success(heightInMeters.toString())
+                                // You can do something with the height value here
+                            }
+
+                        }
+                        .addOnFailureListener { e ->
+                            Log.i(TAG, "There was a problem getting Height.", e)
+                        }
+                        .addOnFailureListener({ e -> Log.d(TAG, "OnFailure()", e) })
+
                 }
             } else {
                 result.notImplemented()

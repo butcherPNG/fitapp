@@ -21,6 +21,7 @@ dependencies:
   shelf: ^1.4.1
   extension_google_sign_in_as_googleapis_auth: ^2.0.10
   http: ^1.1.0
+  intl: ^0.18.1
 
 dev_dependencies: 
   flutter_test:
